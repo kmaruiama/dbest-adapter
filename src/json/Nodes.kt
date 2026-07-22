@@ -1,0 +1,128 @@
+package dbest.json
+
+import dbest.adapter.JoinAlgorithm
+import dbest.adapter.JoinType
+import dbest.adapter.SetKind
+import dbest.misc.mapCollection
+import dbest.misc.transformOr
+import dbest.misc.valueUnless
+import dbest.model.AggNode
+import dbest.model.AliasNode
+import dbest.model.CollapseNode
+import dbest.model.CrossNode
+import dbest.model.DistinctNode
+import dbest.model.ExistsNode
+import dbest.model.ExplodeNode
+import dbest.model.FilterNode
+import dbest.model.HashIndexNode
+import dbest.model.JoinNode
+import dbest.model.LimitNode
+import dbest.model.MaterializeNode
+import dbest.model.MemoizeNode
+import dbest.model.Node
+import dbest.model.ProjectNode
+import dbest.model.RemoveColumnsNode
+import dbest.model.RowNumberNode
+import dbest.model.ScanNode
+import dbest.model.SetOpNode
+import dbest.model.SortNode
+import dbest.model.TableId
+import dbest.model.operatorKind
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+
+fun json(node: Node): JsonElement = when (node) {
+    is ScanNode -> obj("@type" to json(operatorKind(node)), "table" to json(node.table), "alias" to json(node.alias))
+    is FilterNode -> obj("@type" to json(operatorKind(node)), "condition" to json(node.condition))
+    is ProjectNode -> obj("@type" to json(operatorKind(node)), "columns" to JsonArray(mapCollection(node.columns, ::json)))
+    is SortNode -> obj("@type" to json(operatorKind(node)), "keys" to JsonArray(mapCollection(node.keys, ::json)))
+    is DistinctNode -> obj("@type" to json(operatorKind(node)), "hashed" to valueUnless(json(false), node.hashed))
+    is LimitNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "count" to json(node.count),
+        "offset" to valueUnless(json(node.offset), node.offset == 0),
+    )
+    is AliasNode -> obj("@type" to json(operatorKind(node)), "from" to json(node.from), "to" to json(node.to))
+    is CollapseNode -> obj("@type" to json(operatorKind(node)), "alias" to json(node.alias))
+    is ExplodeNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "column" to json(node.column),
+        "delimiter" to valueUnless(json(node.delimiter), node.delimiter == ","),
+    )
+    is RowNumberNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "alias" to json(node.alias),
+        "column" to json(node.column),
+        "start" to valueUnless(json(node.start), node.start == 1),
+    )
+    is AggNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "alias" to json(node.alias),
+        "by" to transformOr(node.by, ::json, JsonNull),
+        "aggregates" to JsonArray(mapCollection(node.aggregates, ::json)),
+        "hashed" to valueUnless(json(false), node.hashed),
+    )
+    is RemoveColumnsNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "columns" to JsonArray(mapCollection(node.columns, ::json)),
+        "alias" to valueUnless(json(node.alias), node.alias == "Projection"),
+    )
+    is MaterializeNode -> obj("@type" to json(operatorKind(node)))
+    is MemoizeNode -> obj("@type" to json(operatorKind(node)))
+    is HashIndexNode -> obj("@type" to json(operatorKind(node)))
+    is JoinNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "on" to JsonArray(mapCollection(node.on, ::json)),
+        "type" to valueUnless(json(node.type.name), node.type == JoinType.INNER),
+        "algorithm" to valueUnless(json(node.algorithm.name), node.algorithm == JoinAlgorithm.NESTED_LOOP),
+    )
+    is CrossNode -> obj("@type" to json(operatorKind(node)))
+    is SetOpNode -> obj(
+        "@type" to json(operatorKind(node)),
+        "kind" to json(node.kind.name),
+        "hashed" to valueUnless(json(false), node.hashed),
+    )
+    is ExistsNode -> obj("@type" to json(operatorKind(node)), "bilateral" to valueUnless(json(true), !node.bilateral))
+}
+
+fun nodeOf(element: JsonElement): Node {
+    val fields = objOf(element)
+    return when (val tag = fields.tag()) {
+        "scan" -> ScanNode(TableId(fields.int("table")), fields.string("alias"))
+        "filter" -> FilterNode(conditionOf(fields.field("condition")))
+        "project" -> ProjectNode(mapCollection(elementsOf(fields.field("columns")), ::stringOf))
+        "sort" -> SortNode(mapCollection(elementsOf(fields.field("keys")), ::sortKeyOf))
+        "distinct" -> DistinctNode(fields.boolean("hashed", default = true))
+        "limit" -> LimitNode(fields.int("count"), fields.int("offset", default = 0))
+        "alias" -> AliasNode(fields.string("from"), fields.string("to"))
+        "collapse" -> CollapseNode(fields.string("alias"))
+        "explode" -> ExplodeNode(fields.string("column"), transformOr(fields["delimiter"], ::stringOf, ","))
+        "rowNumber" -> RowNumberNode(fields.string("alias"), fields.string("column"), fields.int("start", default = 1))
+        "agg" -> {
+            val by = fields.field("by")
+            AggNode(
+                fields.string("alias"),
+                if (by is JsonNull) null else qualifiedColOf(by),
+                mapCollection(elementsOf(fields.field("aggregates")), ::aggOf),
+                fields.boolean("hashed", default = true),
+            )
+        }
+        "removeColumns" -> RemoveColumnsNode(
+            mapCollection(elementsOf(fields.field("columns")), ::stringOf),
+            transformOr(fields["alias"], ::stringOf, "Projection"),
+        )
+        "materialize" -> MaterializeNode
+        "memoize" -> MemoizeNode
+        "hashIndex" -> HashIndexNode
+        "join" -> JoinNode(
+            mapCollection(elementsOf(fields.field("on")), ::joinTermOf),
+            fields.enum("type", default = JoinType.INNER),
+            fields.enum("algorithm", default = JoinAlgorithm.NESTED_LOOP),
+        )
+        "cross" -> CrossNode
+        "setOp" -> SetOpNode(fields.enum<SetKind>("kind"), fields.boolean("hashed", default = true))
+        "exists" -> ExistsNode(fields.boolean("bilateral", default = false))
+        else -> wireError("node desconhecido '$tag'")
+    }
+}
