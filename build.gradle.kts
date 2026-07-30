@@ -1,13 +1,18 @@
 plugins {
     kotlin("jvm") version "2.0.21"
+    application
 }
 
 kotlin {
     jvmToolchain(21)
 }
 
+application {
+    mainClass.set("dbest.http.ServerKt")
+}
+
 sourceSets {
-    main { kotlin.setSrcDirs(listOf("src/2-canvas", "src/3-engine", "src/json", "src/misc")) }
+    main { kotlin.setSrcDirs(listOf("src/1-http", "src/2-canvas", "src/3-engine", "src/json", "src/misc")) }
     test { kotlin.setSrcDirs(listOf("test")) }
 }
 
@@ -20,6 +25,7 @@ val dbestHome = file(System.getenv("DBEST_HOME") ?: providers.gradleProperty("db
 dependencies {
     implementation(files(dbestHome.resolve("target/classes")))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("org.http4k:http4k-core:5.47.0.0")
 
     testImplementation(kotlin("test"))
 }
