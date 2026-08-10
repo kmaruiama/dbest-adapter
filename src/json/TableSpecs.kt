@@ -8,8 +8,10 @@ import dbest.model.BTreeSpec
 import dbest.model.CsvSpec
 import dbest.model.MemorySpec
 import dbest.model.TableSpec
+import dbest.model.XmlSpec
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 
 fun json(spec: TableSpec): JsonElement = when (spec) {
     is MemorySpec -> obj(
@@ -33,6 +35,14 @@ fun json(spec: TableSpec): JsonElement = when (spec) {
         "path" to json(spec.path),
         "cacheSize" to valueUnless(json(spec.cacheSize), spec.cacheSize == 100_000),
     )
+    is XmlSpec -> obj(
+        "@type" to json("xml"),
+        "name" to json(spec.name),
+        "path" to json(spec.path),
+        "columns" to JsonArray(mapCollection(spec.columns, ::json)),
+        "rootElement" to transformOr(spec.rootElement, ::json, JsonNull),
+        "recordElement" to transformOr(spec.recordElement, ::json, JsonNull),
+    )
 }
 
 fun tableSpecOf(element: JsonElement): TableSpec {
@@ -55,6 +65,13 @@ fun tableSpecOf(element: JsonElement): TableSpec {
             fields.string("name"),
             fields.string("path"),
             fields.int("cacheSize", default = 100_000),
+        )
+        "xml" -> XmlSpec(
+            fields.string("name"),
+            fields.string("path"),
+            mapCollection(elementsOf(fields.field("columns")), ::columnOf),
+            fields.stringOrNull("rootElement"),
+            fields.stringOrNull("recordElement"),
         )
         else -> wireError("spec de tabela desconhecido '$tag'")
     }

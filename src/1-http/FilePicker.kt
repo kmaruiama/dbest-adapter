@@ -15,8 +15,8 @@ import org.http4k.core.Status
 Seletor de arquivo nativo aberto NA MAQUINA DO SERVIDOR. O navegador nunca expoe o caminho
 real de um arquivo escolhido (so os bytes), entao o servidor — que roda na mesma maquina no
 uso local — abre o dialogo nativo e devolve o caminho absoluto. Assim nenhum byte do arquivo
-trafega por HTTP: a engine le o .csv / .head / .dat direto pelo path (CsvSpec / BTreeSpec). So
-faz sentido quando servidor e navegador estao na mesma maquina.
+trafega por HTTP: a engine le o .csv / .xml / .head / .dat direto pelo path (CsvSpec / XmlSpec /
+BTreeSpec). So faz sentido quando servidor e navegador estao na mesma maquina.
 */
 
 private val SEPARATORS = listOf(',', ';', '\t', '|')
@@ -46,9 +46,13 @@ fun pickFileResponse(): Response {
             obj("kind" to json("dat"), "path" to json(picked.path), "name" to json(name)),
         )
         lower.endsWith(".csv") -> jsonResponse(Status.OK, csvBody(picked.path, name))
+        lower.endsWith(".xml") -> jsonResponse(
+            Status.OK,
+            obj("kind" to json("xml"), "path" to json(picked.path), "name" to json(name)),
+        )
         else -> errorResponse(
             Status.BAD_REQUEST,
-            "tipo de arquivo nao suportado: '${picked.fileName}' (use .csv, .head ou .dat)",
+            "tipo de arquivo nao suportado: '${picked.fileName}' (use .csv, .xml, .head ou .dat)",
         )
     }
 }
@@ -58,7 +62,7 @@ private fun openNativeDialog(): Picked? {
     EventQueue.invokeAndWait {
         val owner = Frame()
         owner.isAlwaysOnTop = true
-        val dialog = FileDialog(owner, "DBest — escolher tabela (.csv / .head / .dat)", FileDialog.LOAD)
+        val dialog = FileDialog(owner, "DBest — escolher tabela (.csv / .xml / .head / .dat)", FileDialog.LOAD)
         dialog.isVisible = true
         val directory = dialog.directory
         val file = dialog.file

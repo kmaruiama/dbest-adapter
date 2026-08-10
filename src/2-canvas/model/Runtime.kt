@@ -7,6 +7,7 @@ import dbest.adapter.csvTable
 import dbest.adapter.insert
 import dbest.adapter.memoryTable
 import dbest.adapter.openBTreeTable
+import dbest.adapter.xmlTable
 import java.util.concurrent.ConcurrentHashMap
 
 class OpenTables : AutoCloseable {
@@ -46,4 +47,11 @@ private fun openTable(spec: TableSpec): TableHandle = when (spec) {
         headerLine = spec.headerLine,
     )
     is BTreeSpec -> openBTreeTable(spec.path, spec.cacheSize)
+    is XmlSpec -> xmlTable(
+        spec.path,
+        spec.name,
+        *spec.columns.toTypedArray(),
+        rootElement = spec.rootElement,
+        recordElement = spec.recordElement,
+    )
 }

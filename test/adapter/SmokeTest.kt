@@ -259,6 +259,42 @@ class SmokeTest {
     }
 
     @Test
+    fun `xml table scans a file with typed columns and rejects writes`() {
+        val file = kotlin.io.path.createTempFile("employees", ".xml").toFile()
+        file.deleteOnExit()
+        file.writeText(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <employees>
+                <employee><name>Ana</name><age>22</age><dept>TI</dept></employee>
+                <employee><name>Bruno</name><age>17</age><dept>RH</dept></employee>
+                <employee><name>Carla</name><age>34</age><dept>TI</dept></employee>
+            </employees>
+            """.trimIndent(),
+        )
+
+        // rootElement/recordElement deixados nulos: a engine auto-detecta employees/employee
+        val t = xmlTable(file.path, "employees", stringColumn("name"), intColumn("age"), stringColumn("dept"))
+
+        // o scan devolve todas as linhas com as colunas declaradas, ja com o tipo certo
+        // (age vem como Int, nao String — XMLTable converte pelo prototype).
+        val rows = execute(scan(t, "e"))
+        assertEquals(listOf<Any?>("Ana", "Bruno", "Carla"), rows.map { it["e.name"] })
+        assertEquals(listOf<Any?>(22, 17, 34), rows.map { it["e.age"] })
+
+        // XMLTable eh somente-leitura: escrever levanta StorageError (igual ao CSV)
+        assertFailsWith<EngineException.StorageError> {
+            insert(t, mapOf("name" to "Duda", "age" to 40, "dept" to "TI"))
+        }
+
+        // Aviso de comportamento real da engine: XMLTable.getFilteredRecords ignora o filtro
+        // delegado (retorna tudo), e o IndexScan declara delegacao — entao um Filter sobre uma
+        // fonte XML NAO filtra (diferente do CSV). Fixado por probe abaixo.
+        val filtered = execute(filter(scan(t, "e"), gte("age", 18)))
+        assertEquals(3, filtered.size)
+    }
+
+    @Test
     fun `stats count engine work and reset to zero`() {
         resetStats()
         execute(filter(scan(users(), "u"), gte("age", 18)))

@@ -20,6 +20,8 @@ import ibd.table.prototype.column.IntegerColumn
 import ibd.table.prototype.column.LongColumn
 import ibd.table.prototype.column.StringColumn
 import ibd.table.prototype.metadata.Metadata
+import ibd.table.xml.XMLRecognizer
+import ibd.table.xml.XMLTable
 
 /*
 * operacoes que dizem respeito a criacao de tabelas, casting de colunas,
@@ -53,6 +55,14 @@ fun csvTable(path: String, name: String, vararg columns: Column, separator: Char
     val header: Header = Header(prototype(*columns), name)
     header.set(Header.FILE_PATH, path)
     val table: CSVTable = CSVTable(header, separator, delimiter, headerLine)
+    table.open()
+    TableHandle(table)
+}
+
+fun xmlTable(path: String, name: String, vararg columns: Column, rootElement: String? = null, recordElement: String? = null): TableHandle = gate {
+    val header: Header = Header(prototype(*columns), name)
+    header.set(Header.FILE_PATH, path)
+    val table: XMLTable = XMLTable(header, rootElement, recordElement, XMLRecognizer.FlatteningStrategy.NESTED_COLUMNS)
     table.open()
     TableHandle(table)
 }

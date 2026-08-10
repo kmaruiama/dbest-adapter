@@ -187,15 +187,21 @@ SchemaColumn { "source": string, "name": string, "type": string, "primaryKey": b
 `Column.type` is a `ColumnType` enum (§8); `SchemaColumn.type` is a **raw engine string**, not a
 `ColumnType`.
 
-## 6. Table specs (tagged by `@type`, `TABLE_SPEC_KINDS = ["memory","csv","btree"]`)
+## 6. Table specs (tagged by `@type`, `TABLE_SPEC_KINDS = ["memory","csv","btree","xml"]`)
 ```json
 { "@type": "memory", "name": string, "columns": [Column], "rows?": [Row] }
 { "@type": "csv",    "name": string, "path": string, "columns": [Column],
   "separator?": ",", "delimiter?": "\"", "headerLine?": 1 }
 { "@type": "btree",  "name": string, "path": string, "cacheSize?": 100000 }
+{ "@type": "xml",    "name": string, "path": string, "columns": [Column],
+  "rootElement": string|null, "recordElement": string|null }
 ```
 `memory.rows` omitted when empty. `separator`/`delimiter` are single characters. Table `name` is
-how the engine indexes the relation, so it must be unique within a session.
+how the engine indexes the relation, so it must be unique within a session. `xml` is read-only;
+`rootElement`/`recordElement` are always present, `null` meaning the engine auto-detects them.
+Declared `columns` are matched by name against the flattened XML (child elements by tag name,
+attributes as `@attr`); values are coerced to the declared `ColumnType`. Note: the engine's
+XMLTable ignores delegated filters, so a `filter` over an XML scan is not applied at the source.
 
 ## 7. Commands (tagged by `@type`)
 ```json

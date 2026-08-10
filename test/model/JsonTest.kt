@@ -1,6 +1,8 @@
 package dbest.model
 
 import dbest.adapter.LogicalKind
+import dbest.adapter.intColumn
+import dbest.adapter.stringColumn
 import dbest.json.historyOf
 import dbest.json.json
 import dbest.json.jsonText
@@ -34,6 +36,28 @@ class JsonTest {
             AddNode(NodeId(1), LogicalOpNode(LogicalKind.AND), Position(0.0, 0.0)),
             AddNode(NodeId(2), LogicalOpNode(LogicalKind.OR), Position(0.0, 60.0)),
             AddNode(NodeId(3), LogicalOpNode(LogicalKind.XOR), Position(0.0, 120.0)),
+        ).fold(History()) { history, command -> edit(history, command) }
+
+        assertEquals(history, historyOf(parsedJson(jsonText(json(history)))))
+    }
+
+    // XmlSpec eh novo (fora do golden fixture-v1): cobre os dois caminhos dos opcionais
+    // rootElement/recordElement — ausentes (auto-detect) e presentes.
+    @Test
+    fun `xml table specs round-trip through the codec`() {
+        val history = listOf(
+            AddTable(
+                TableId(1),
+                XmlSpec("employees", "data/employees.xml", listOf(stringColumn("name"), intColumn("age"))),
+            ),
+            AddTable(
+                TableId(2),
+                XmlSpec(
+                    "orders", "data/orders.xml",
+                    listOf(intColumn("id", primaryKey = true), intColumn("total")),
+                    rootElement = "orders", recordElement = "order",
+                ),
+            ),
         ).fold(History()) { history, command -> edit(history, command) }
 
         assertEquals(history, historyOf(parsedJson(jsonText(json(history)))))
