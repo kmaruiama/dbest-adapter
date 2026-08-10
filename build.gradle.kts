@@ -12,7 +12,7 @@ application {
 }
 
 sourceSets {
-    main { kotlin.setSrcDirs(listOf("src/1-http", "src/2-canvas", "src/3-engine", "src/json", "src/misc")) }
+    main { kotlin.setSrcDirs(listOf("src/1-http", "src/2-canvas", "src/3-engine", "src/json", "src/misc", "src/export")) }
     test { kotlin.setSrcDirs(listOf("test")) }
 }
 

@@ -153,4 +153,43 @@ class RoutesTest {
         val response = app(Request(Method.GET, "/nodes/7/schema"))
         assertEquals(Status.NOT_FOUND, response.status)
     }
+
+    @Test
+    fun `export downloads a CSV file for a runnable node`() {
+        val app = app()
+        app.command(AddTable(TableId(0), users()))
+        app.command(AddNode(NodeId(0), ScanNode(TableId(0), "u"), Position(0.0, 0.0)))
+
+        val response = app(Request(Method.GET, "/nodes/0/export?format=csv"))
+        assertEquals(Status.OK, response.status)
+        assertTrue(response.header("Content-Type")!!.startsWith("text/csv"))
+        assertEquals("attachment; filename=\"export.csv\"", response.header("Content-Disposition"))
+        // corpo eh o CSV cru, nao um envelope JSON: cabecalho na ordem do schema + 3 linhas
+        val lines = response.bodyString().trim().split("\r\n")
+        assertEquals("id,name,age", lines.first())
+        assertEquals(4, lines.size)
+    }
+
+    @Test
+    fun `export honours format and table query params`() {
+        val app = app()
+        app.command(AddTable(TableId(0), users()))
+        app.command(AddNode(NodeId(0), ScanNode(TableId(0), "u"), Position(0.0, 0.0)))
+
+        val sql = app(Request(Method.GET, "/nodes/0/export?format=sql&table=people"))
+        assertEquals(Status.OK, sql.status)
+        assertTrue(sql.header("Content-Type")!!.startsWith("application/sql"))
+        assertEquals("attachment; filename=\"people.sql\"", sql.header("Content-Disposition"))
+        assertTrue("CREATE TABLE \"people\"" in sql.bodyString())
+    }
+
+    @Test
+    fun `an unknown export format is a 400`() {
+        val app = app()
+        app.command(AddTable(TableId(0), users()))
+        app.command(AddNode(NodeId(0), ScanNode(TableId(0), "u"), Position(0.0, 0.0)))
+
+        val response = app(Request(Method.GET, "/nodes/0/export?format=pdf"))
+        assertEquals(Status.BAD_REQUEST, response.status)
+    }
 }

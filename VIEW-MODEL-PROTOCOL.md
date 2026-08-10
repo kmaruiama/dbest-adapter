@@ -45,8 +45,17 @@ CORS filter, so the client must hit its **own origin**, never `:8000` directly.
 | GET  | `/nodes/{id}/rows` | — | `RowsPage` (§3.3) | query `?offset=&limit=` (both or neither) |
 | GET  | `/nodes/{id}/schema` | — | `SchemaColumn[]` (§5.7) | output columns of the subtree at `{id}` |
 | GET  | `/nodes/{id}/exists` | — | `{ "exists": boolean }` | true iff the subtree yields ≥1 row |
+| GET  | `/nodes/{id}/export` | — | **file** (not JSON) | `?format=csv\|sql` (default `csv`), `?table=` (default `export`); `Content-Disposition: attachment` |
 
 `{id}` is a node id (integer). Unknown id → 404.
+
+`/nodes/{id}/export` is the one endpoint whose body is **not** a mirrored JSON envelope: it streams
+the node's result as a downloadable `text/csv` or `application/sql` file (RFC 4180 CSV; ANSI SQL
+`CREATE TABLE` + `INSERT`s). Column headers/identifiers follow the legacy `exportToCSV` rule —
+bare `name` when all are unique, else every column falls back to qualified `source.name` (all-or-
+nothing, so join outputs like `u.id`/`o.id` stay distinct). Unknown `format` → 400. The client must
+**not** route it through the JSON `request()` helper — use a plain link / `window.location` so the
+browser saves the file.
 
 ### Errors
 Any non-2xx carries `{ "error": "<message>" }`. Status mapping (`src/1-http/Errors.kt`):

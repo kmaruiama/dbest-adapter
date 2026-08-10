@@ -1,5 +1,7 @@
 package dbest.http
 
+import dbest.export.exportFormatOf
+import dbest.export.exportRows
 import dbest.json.commandOf
 import dbest.json.json
 import dbest.json.obj
@@ -38,6 +40,7 @@ fun router(canvas: Canvas): HttpHandler = errorFilter.then(
         "/nodes/{id}/exists" bind GET to { request ->
             jsonResponse(Status.OK, obj("exists" to json(canvas.exists(nodeId(canvas, request)))))
         },
+        "/nodes/{id}/export" bind GET to { request -> exportResponse(canvas, request) },
     )
 )
 
@@ -78,6 +81,30 @@ private fun rowsResponse(canvas: Canvas, request: Request): Response {
     }
     val elapsedMs = (System.nanoTime() - start) / 1_000_000.0
     return jsonResponse(Status.OK, obj("rows" to rowsJson(rows), "elapsedMs" to json(elapsedMs)))
+}
+
+// exporta o resultado de um node como arquivo (nao eh JSON, entao vai fora dos codecs): le
+// ?format= (csv por padrao) e ?table= (nome logico, "export" por padrao), monta o texto e devolve
+// com Content-Disposition de download. Formato desconhecido -> IllegalArgumentException -> 400.
+private fun exportResponse(canvas: Canvas, request: Request): Response {
+    val id = nodeId(canvas, request)
+    val format = exportFormatOf(request.query("format") ?: "csv")
+    val table = request.query("table") ?: "export"
+    val body = exportRows(format, table, canvas.schema(id), canvas.rows(id))
+    return Response(Status.OK)
+        .header("Content-Type", format.contentType)
+        .header("Content-Disposition", "attachment; filename=\"${fileSafe(table)}.${format.extension}\"")
+        .body(body)
+}
+
+// nome seguro para o header de download: so letras/digitos/._- ; o resto vira _ (evita quebrar
+// o Content-Disposition ou injetar CRLF). O nome logico cru ainda vai pro SQL (la eh citado).
+private fun fileSafe(name: String): String {
+    val out = StringBuilder()
+    for (c in name) {
+        out.append(if (c.isLetterOrDigit() || c == '.' || c == '_' || c == '-') c else '_')
+    }
+    return if (out.isEmpty()) "export" else out.toString()
 }
 
 private fun nodeId(canvas: Canvas, request: Request): NodeId {
