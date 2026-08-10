@@ -24,7 +24,7 @@ import org.http4k.routing.routes
 
 // mapa de rotas do servidor
 
-fun router(canvas: Canvas): HttpHandler = errorFilter.then(
+fun router(canvas: Canvas): HttpHandler = accessLogFilter.then(errorFilter).then(
     routes(
         "/session" bind GET to { sessionResponse(canvas) },
         "/commands" bind POST to { request -> ackResponse(canvas.edit(commandOf(parsedJson(request.bodyString())))) },

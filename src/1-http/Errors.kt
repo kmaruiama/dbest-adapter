@@ -3,6 +3,7 @@ package dbest.http
 import dbest.adapter.EngineException
 import kotlinx.serialization.SerializationException
 import org.http4k.core.Filter
+import org.http4k.core.Response
 import org.http4k.core.Status
 
 /*
@@ -14,22 +15,29 @@ import org.http4k.core.Status
   qualquer outra            -> 500
 */
 
+// log na borda: 4xx viram uma linha (esperados, culpa do cliente); 5xx levam o stack trace junto
+private fun fail(status: Status, e: Throwable, fallback: String, trace: Boolean): Response {
+    val message: String = e.message ?: fallback
+    logError("${status.code} ${e.javaClass.simpleName}: $message", if (trace) e else null)
+    return errorResponse(status, message)
+}
+
 val errorFilter = Filter { next ->
     { request ->
         try {
             next(request)
         } catch (e: NotFoundException) {
-            errorResponse(Status.NOT_FOUND, e.message ?: "nao encontrado")
+            fail(Status.NOT_FOUND, e, "nao encontrado", trace = false)
         } catch (e: IllegalArgumentException) {
-            errorResponse(Status.BAD_REQUEST, e.message ?: "requisicao invalida")
+            fail(Status.BAD_REQUEST, e, "requisicao invalida", trace = false)
         } catch (e: SerializationException) {
-            errorResponse(Status.BAD_REQUEST, e.message ?: "corpo malformado")
+            fail(Status.BAD_REQUEST, e, "corpo malformado", trace = false)
         } catch (e: EngineException.PlanError) {
-            errorResponse(Status.UNPROCESSABLE_ENTITY, e.message ?: "plano invalido")
+            fail(Status.UNPROCESSABLE_ENTITY, e, "plano invalido", trace = false)
         } catch (e: EngineException.StorageError) {
-            errorResponse(Status.BAD_GATEWAY, e.message ?: "erro de storage")
+            fail(Status.BAD_GATEWAY, e, "erro de storage", trace = true)
         } catch (e: EngineException) {
-            errorResponse(Status.INTERNAL_SERVER_ERROR, e.message ?: "falha na engine")
+            fail(Status.INTERNAL_SERVER_ERROR, e, "falha na engine", trace = true)
         }
     }
 }
