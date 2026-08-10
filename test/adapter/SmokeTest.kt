@@ -160,6 +160,38 @@ class SmokeTest {
     }
 
     @Test
+    fun `logical and or emit one boolean row from side existence`() {
+        val full = { scan(users(), "u") }
+        val none = { filter(scan(users(), "u"), gt("age", 99)) }
+
+        // cada operador produz uma unica linha booleana sob a fonte "condition"
+        assertEquals(listOf<Any?>(true), execute(logicalAnd(full(), full())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(false), execute(logicalAnd(full(), none())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(false), execute(logicalAnd(none(), full())).map { it["condition.EVAL"] })
+
+        assertEquals(listOf<Any?>(true), execute(logicalOr(full(), none())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(true), execute(logicalOr(none(), full())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(false), execute(logicalOr(none(), none())).map { it["condition.EVAL"] })
+    }
+
+    @Test
+    fun `logical xor discriminates only when a side is itself a condition`() {
+        val full = { scan(users(), "u") }
+        val none = { filter(scan(users(), "u"), gt("age", 99)) }
+
+        // fontes de dados puras: a engine trata um lado vazio como "satisfeito", entao
+        // XOR eh sempre falso (true ^ true) — comportamento real fixado por probe
+        assertEquals(listOf<Any?>(false), execute(logicalXor(full(), full())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(false), execute(logicalXor(full(), none())).map { it["condition.EVAL"] })
+
+        // encadeando outro LogicalOp (fonte booleana de coluna unica) o XOR passa a discriminar
+        val falseCond = { logicalAnd(none(), none()) } // EVAL=false
+        val trueCond = { logicalAnd(full(), full()) }  // EVAL=true
+        assertEquals(listOf<Any?>(true), execute(logicalXor(falseCond(), full())).map { it["condition.EVAL"] })
+        assertEquals(listOf<Any?>(false), execute(logicalXor(trueCond(), full())).map { it["condition.EVAL"] })
+    }
+
+    @Test
     fun `alias renames a source mid-plan`() {
         val plan = filter(alias(scan(users(), "u"), "u", "x"), gte("x.age", 18))
 

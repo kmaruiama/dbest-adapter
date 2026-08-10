@@ -1,5 +1,6 @@
 package dbest.adapter.compile
 
+import dbest.adapter.Conditional
 import dbest.adapter.CrossJoin
 import dbest.adapter.EngineException
 import dbest.adapter.Join
@@ -7,9 +8,15 @@ import dbest.adapter.JoinAlgorithm.HASH
 import dbest.adapter.JoinAlgorithm.MERGE
 import dbest.adapter.JoinAlgorithm.NESTED_LOOP
 import dbest.adapter.JoinType
+import dbest.adapter.LogicalKind
+import dbest.adapter.LogicalOp
 import dbest.adapter.SetKind
 import dbest.adapter.SetOp
 import ibd.query.Operation
+import ibd.query.binaryop.conditional.LogicalAnd
+import ibd.query.binaryop.conditional.LogicalIf
+import ibd.query.binaryop.conditional.LogicalOr
+import ibd.query.binaryop.conditional.LogicalXor
 import ibd.query.binaryop.join.CrossJoin as IbdCrossJoin
 import ibd.query.binaryop.join.HashInnerJoin
 import ibd.query.binaryop.join.JoinPredicate
@@ -114,3 +121,16 @@ internal fun compileSet(plan: SetOp): Operation {
         SetKind.APPEND -> Append(left, right)
     }
 }
+
+internal fun compileLogical(plan: LogicalOp): Operation {
+    val left: Operation = compile(plan.left)
+    val right: Operation = compile(plan.right)
+    return when (plan.kind) {
+        LogicalKind.AND -> LogicalAnd(left, right)
+        LogicalKind.OR -> LogicalOr(left, right)
+        LogicalKind.XOR -> LogicalXor(left, right)
+    }
+}
+
+internal fun compileConditional(plan: Conditional): Operation =
+    LogicalIf(compile(plan.left), compile(plan.right), lookupFilter(plan.condition))

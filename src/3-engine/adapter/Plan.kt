@@ -177,6 +177,33 @@ fun except(left: Plan, right: Plan, hashed: Boolean = true): Plan = SetOp(left, 
 
 fun append(left: Plan, right: Plan): Plan = SetOp(left, right, SetKind.APPEND, hashed = false)
 
+// booleano/condicional --------------------------------------------------------------------------------------
+
+// AND/OR/XOR nao produzem linhas de dados: cada um emite uma unica linha booleana
+// (coluna EVAL sob a fonte "condition") combinando a existencia — ou o valor booleano,
+// quando o lado eh ele mesmo uma condicao — dos dois lados. Diferem so pelo conector,
+// exatamente como SetOp(kind).
+enum class LogicalKind { AND, OR, XOR }
+
+data class LogicalOp(val left: Plan, val right: Plan, val kind: LogicalKind) : Plan
+
+fun logicalAnd(left: Plan, right: Plan): Plan = LogicalOp(left, right, LogicalKind.AND)
+fun logicalOr(left: Plan, right: Plan): Plan = LogicalOp(left, right, LogicalKind.OR)
+fun logicalXor(left: Plan, right: Plan): Plan = LogicalOp(left, right, LogicalKind.XOR)
+
+// IF: escolhe a primeira linha da esquerda ou da direita conforme a condicao. Reusa
+// a ADT Condition existente e a traducao lookupFilter() — nenhum encanamento de filtro novo.
+//
+// ADIADO como no de canvas: LogicalIf avalia seu filtro com match(null) num contexto
+// nao-correlacionado, e nossas condicoes sempre referenciam uma coluna
+// (ColumnElement.getValue(null) -> NPE). Como o canvas executa todo no como raiz, o IF
+// nunca recebe as tuplas processadas de que precisa. O primitivo fica escrito aqui como
+// base; nao ha ConditionalNode/chip ate existir um contexto de execucao correlacionado.
+data class Conditional(val left: Plan, val right: Plan, val condition: Condition) : Plan
+
+fun conditional(left: Plan, right: Plan, condition: Condition): Plan =
+    Conditional(left, right, condition)
+
 // binarios, existencia --------------------------------------------------------------------------------------
 
 data class Existence(val left: Plan, val right: Plan, val bilateral: Boolean) : Plan

@@ -2,6 +2,7 @@ package dbest.model
 
 import dbest.adapter.EngineException
 import dbest.adapter.GroupBy
+import dbest.adapter.LogicalKind
 import dbest.adapter.Plan
 import dbest.adapter.SchemaColumn
 import dbest.adapter.SetKind
@@ -21,6 +22,9 @@ import dbest.adapter.hashIndex
 import dbest.adapter.intersect
 import dbest.adapter.join
 import dbest.adapter.limit
+import dbest.adapter.logicalAnd
+import dbest.adapter.logicalOr
+import dbest.adapter.logicalXor
 import dbest.adapter.materialize
 import dbest.adapter.memoize
 import dbest.adapter.project
@@ -95,6 +99,11 @@ fun plan(session: Session, root: NodeId, tables: OpenTables): Plan {
             SetKind.INTERSECT -> intersect(input(Port.LEFT), input(Port.RIGHT), node.hashed)
             SetKind.EXCEPT -> except(input(Port.LEFT), input(Port.RIGHT), node.hashed)
             SetKind.APPEND -> append(input(Port.LEFT), input(Port.RIGHT))
+        }
+        is LogicalOpNode -> when (node.kind) {
+            LogicalKind.AND -> logicalAnd(input(Port.LEFT), input(Port.RIGHT))
+            LogicalKind.OR -> logicalOr(input(Port.LEFT), input(Port.RIGHT))
+            LogicalKind.XOR -> logicalXor(input(Port.LEFT), input(Port.RIGHT))
         }
         is ExistsNode ->
             if (node.bilateral) bilateralExistence(input(Port.LEFT), input(Port.RIGHT))

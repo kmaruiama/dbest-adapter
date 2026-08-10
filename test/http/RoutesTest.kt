@@ -14,6 +14,7 @@ import dbest.model.NodeId
 import dbest.model.Position
 import dbest.model.ScanNode
 import dbest.model.TableId
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -47,6 +48,7 @@ class RoutesTest {
 
     private fun Response.field(name: String) = parsedJson(bodyString()).jsonObject.getValue(name)
     private fun Response.revision() = field("revision").jsonPrimitive.int
+    private fun Response.depth() = field("depth").jsonPrimitive.int
 
     @Test
     fun `a mutation returns only the new revision, never the session`() {
@@ -104,6 +106,30 @@ class RoutesTest {
     }
 
     @Test
+    fun `depth tracks the undo stack while revision only ever climbs`() {
+        val app = app()
+        assertEquals(1 to 1, app.command(AddTable(TableId(0), users())).let { it.revision() to it.depth() })
+        assertEquals(
+            2 to 2,
+            app.command(AddNode(NodeId(0), ScanNode(TableId(0), "u"), Position(0.0, 0.0)))
+                .let { it.revision() to it.depth() },
+        )
+
+        // undo: revisao avanca (3), profundidade recua (1)
+        val undo = app(Request(Method.POST, "/undo"))
+        assertEquals(3, undo.revision())
+        assertEquals(1, undo.depth())
+
+        // redo: revisao avanca de novo (4), profundidade volta (2)
+        val redo = app(Request(Method.POST, "/redo"))
+        assertEquals(4, redo.revision())
+        assertEquals(2, redo.depth())
+
+        // GET /session tambem expoe a profundidade corrente
+        assertEquals(2, app(Request(Method.GET, "/session")).depth())
+    }
+
+    @Test
     fun `derived reads expose schema and rows from the engine`() {
         val app = app()
         app.command(AddTable(TableId(0), users()))
@@ -115,7 +141,10 @@ class RoutesTest {
         assertEquals(listOf("id", "name", "age"), columns)
 
         val rows = app(Request(Method.GET, "/nodes/0/rows"))
-        assertEquals(3, parsedJson(rows.bodyString()).jsonArray.size)
+        val rowsBody = parsedJson(rows.bodyString()).jsonObject
+        assertEquals(3, rowsBody.getValue("rows").jsonArray.size)
+        // a engine reporta seu tempo de processamento junto das tuplas
+        assertTrue(rowsBody.getValue("elapsedMs").jsonPrimitive.double >= 0.0)
     }
 
     @Test

@@ -5,6 +5,7 @@ package dbest.adapter.compile
 import dbest.adapter.Aggregate
 import dbest.adapter.Alias
 import dbest.adapter.Collapse
+import dbest.adapter.Conditional
 import dbest.adapter.CrossJoin
 import dbest.adapter.Distinct
 import dbest.adapter.Existence
@@ -13,6 +14,7 @@ import dbest.adapter.Filter
 import dbest.adapter.HashIndex
 import dbest.adapter.Join
 import dbest.adapter.Limit
+import dbest.adapter.LogicalOp
 import dbest.adapter.Materialize
 import dbest.adapter.Memoize
 import dbest.adapter.Plan
@@ -55,6 +57,8 @@ internal fun compile(plan: Plan): Operation = gate {
         is Join -> compileJoin(plan)
         is CrossJoin -> compileCross(plan)
         is SetOp -> compileSet(plan)
+        is LogicalOp -> compileLogical(plan)
+        is Conditional -> compileConditional(plan)
         is Existence -> Exists(compile(plan.left), compile(plan.right), plan.bilateral)
         is Materialize -> Materialization(compile(plan.input))
         is Memoize -> IbdMemoize(compile(plan.input))

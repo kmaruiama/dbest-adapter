@@ -28,6 +28,7 @@ fun router(canvas: Canvas): HttpHandler = errorFilter.then(
         "/commands" bind POST to { request -> ackResponse(canvas.edit(commandOf(parsedJson(request.bodyString())))) },
         "/undo" bind POST to { ackResponse(canvas.undo()) },
         "/redo" bind POST to { ackResponse(canvas.redo()) },
+        "/pick-file" bind POST to { pickFileResponse() },
         "/roots" bind GET to { jsonResponse(Status.OK, JsonArray(mapCollection(canvas.roots(), { json(it) }))) },
         "/problems" bind GET to { jsonResponse(Status.OK, JsonArray(mapCollection(canvas.problems(), { json(it) }))) },
         "/nodes/{id}/rows" bind GET to { request -> rowsResponse(canvas, request) },
@@ -44,6 +45,7 @@ private fun sessionResponse(canvas: Canvas): Response {
     val (session, ack) = canvas.view()
     val body = obj(
         "revision" to json(ack.revision),
+        "depth" to json(ack.depth),
         "session" to json(session),
         "canUndo" to json(ack.canUndo),
         "canRedo" to json(ack.canRedo),
@@ -56,6 +58,7 @@ private fun ackResponse(ack: Ack): Response =
 
 private fun ackJson(ack: Ack): JsonElement = obj(
     "revision" to json(ack.revision),
+    "depth" to json(ack.depth),
     "canUndo" to json(ack.canUndo),
     "canRedo" to json(ack.canRedo),
     "applied" to ack.applied?.let { json(it) },
@@ -65,12 +68,16 @@ private fun rowsResponse(canvas: Canvas, request: Request): Response {
     val id = nodeId(canvas, request)
     val offset = request.query("offset")
     val limit = request.query("limit")
+    // mede o processamento da engine (compilar + rodar + drenar); fica de fora a serializacao
+    // JSON e a rede, para o cliente reportar um tempo fiel mesmo em loopback
+    val start = System.nanoTime()
     val rows = if (offset != null && limit != null) {
         canvas.rows(id, intParam("offset", offset), intParam("limit", limit))
     } else {
         canvas.rows(id)
     }
-    return jsonResponse(Status.OK, rowsJson(rows))
+    val elapsedMs = (System.nanoTime() - start) / 1_000_000.0
+    return jsonResponse(Status.OK, obj("rows" to rowsJson(rows), "elapsedMs" to json(elapsedMs)))
 }
 
 private fun nodeId(canvas: Canvas, request: Request): NodeId {

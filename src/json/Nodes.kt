@@ -2,6 +2,7 @@ package dbest.json
 
 import dbest.adapter.JoinAlgorithm
 import dbest.adapter.JoinType
+import dbest.adapter.LogicalKind
 import dbest.adapter.SetKind
 import dbest.misc.mapCollection
 import dbest.misc.transformOr
@@ -17,6 +18,7 @@ import dbest.model.FilterNode
 import dbest.model.HashIndexNode
 import dbest.model.JoinNode
 import dbest.model.LimitNode
+import dbest.model.LogicalOpNode
 import dbest.model.MaterializeNode
 import dbest.model.MemoizeNode
 import dbest.model.Node
@@ -83,6 +85,7 @@ fun json(node: Node): JsonElement = when (node) {
         "kind" to json(node.kind.name),
         "hashed" to valueUnless(json(false), node.hashed),
     )
+    is LogicalOpNode -> obj("@type" to json(operatorKind(node)), "kind" to json(node.kind.name))
     is ExistsNode -> obj("@type" to json(operatorKind(node)), "bilateral" to valueUnless(json(true), !node.bilateral))
 }
 
@@ -122,6 +125,7 @@ fun nodeOf(element: JsonElement): Node {
         )
         "cross" -> CrossNode
         "setOp" -> SetOpNode(fields.enum<SetKind>("kind"), fields.boolean("hashed", default = true))
+        "logicalOp" -> LogicalOpNode(fields.enum<LogicalKind>("kind"))
         "exists" -> ExistsNode(fields.boolean("bilateral", default = false))
         else -> wireError("node desconhecido '$tag'")
     }

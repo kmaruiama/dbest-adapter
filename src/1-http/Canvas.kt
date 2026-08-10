@@ -17,7 +17,11 @@ import dbest.model.schema as schemaAt
 import dbest.model.undo as undoHistory
 
 data class Ack(
+    // revision: contador monotonico (versao/ETag), sobe a cada mutacao inclusive undo/redo.
+    // depth: tamanho da pilha de undo (quantas acoes da pra desfazer) — cresce com edicoes,
+    // encolhe no undo, volta a crescer no redo. Eh o numero que a view mostra pro usuario.
     val revision: Int,
+    val depth: Int,
     val canUndo: Boolean,
     val canRedo: Boolean,
     val applied: Command? = null,
@@ -79,7 +83,7 @@ class Canvas(initial: History = History()) : AutoCloseable {
     fun exists(root: NodeId): Boolean = existsAt(session(), root, tables)
 
     private fun ack(applied: Command? = null): Ack =
-        Ack(revision, history.undoStack.isNotEmpty(), history.redoStack.isNotEmpty(), applied)
+        Ack(revision, history.undoStack.size, history.undoStack.isNotEmpty(), history.redoStack.isNotEmpty(), applied)
 
     override fun close() = tables.close()
 }

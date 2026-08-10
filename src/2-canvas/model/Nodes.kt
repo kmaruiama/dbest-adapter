@@ -5,6 +5,7 @@ import dbest.adapter.Condition
 import dbest.adapter.JoinAlgorithm
 import dbest.adapter.JoinTerm
 import dbest.adapter.JoinType
+import dbest.adapter.LogicalKind
 import dbest.adapter.QualifiedCol
 import dbest.adapter.SetKind
 import dbest.adapter.SortKey
@@ -47,6 +48,7 @@ fun operatorKind(node: Node): String = when (node) {
     is JoinNode -> "join"
     is CrossNode -> "cross"
     is SetOpNode -> "setOp"
+    is LogicalOpNode -> "logicalOp"
     is ExistsNode -> "exists"
 }
 
@@ -135,6 +137,11 @@ data class JoinNode(val on: List<JoinTerm>, val type: JoinType = JoinType.INNER,
 data object CrossNode : BinaryNode
 
 data class SetOpNode(val kind: SetKind, val hashed: Boolean = true) : BinaryNode
+
+// booleano: combina os dois lados numa unica linha booleana (condition.EVAL) — AND/OR
+// exigem que ambos/algum lado tenha linhas; XOR so eh significativo quando um lado eh
+// ele mesmo uma condicao (outro LogicalOpNode). Diferem so pelo conector, como SetOpNode.
+data class LogicalOpNode(val kind: LogicalKind) : BinaryNode
 
 // existencia: emite uma tupla se os lados tem resultados — unilateral (um lado
 // basta) ou bilateral (ambos precisam ter)
