@@ -33,22 +33,61 @@ class ExportTest {
     }
 
     @Test
-    fun `sql emits CREATE TABLE with types and primary key`() {
+    fun `csv quotes fields containing newlines`() {
+        val single = listOf(SchemaColumn("t", "note", "STRING", false))
+        val row = listOf(mapOf("t.note" to "line1\nline2"))
+        val csv = exportRows(ExportFormat.CSV, "t", single, row)
+        assertEquals("note\r\n\"line1\nline2\"\r\n", csv)
+    }
+
+    @Test
+    fun `sql emits CREATE TABLE with MySQL types and primary key`() {
         val sql = exportRows(ExportFormat.SQL, "users", schema(), rows())
-        assertTrue("CREATE TABLE \"users\" (" in sql)
-        assertTrue("\"id\" INTEGER" in sql)
-        assertTrue("\"name\" VARCHAR(255)" in sql)
-        assertTrue("\"active\" BOOLEAN" in sql)
-        assertTrue("PRIMARY KEY (\"id\")" in sql)
+        assertTrue("CREATE TABLE IF NOT EXISTS `users` (" in sql)
+        assertTrue("`id` INT" in sql)
+        assertTrue("`name` TEXT" in sql)
+        assertTrue("`active` BOOLEAN" in sql)
+        assertTrue("PRIMARY KEY (`id`)" in sql)
+    }
+
+    @Test
+    fun `sql maps engine numeric types to MySQL types`() {
+        val numeric = listOf(
+            SchemaColumn("t", "a", "LONG", false),
+            SchemaColumn("t", "b", "FLOAT", false),
+            SchemaColumn("t", "c", "DOUBLE", false),
+        )
+        val sql = exportRows(ExportFormat.SQL, "t", numeric, emptyList())
+        assertTrue("`a` BIGINT" in sql)
+        assertTrue("`b` FLOAT" in sql)
+        assertTrue("`c` DOUBLE" in sql)
     }
 
     @Test
     fun `sql literals - numbers raw, strings escaped, null NULL, boolean TRUE`() {
         val sql = exportRows(ExportFormat.SQL, "users", schema(), rows())
-        // aspas simples dobradas dentro do literal; boolean e numero crus
-        assertTrue("INSERT INTO \"users\" (\"id\", \"name\", \"active\") VALUES (1, 'O''Brien', TRUE);" in sql)
-        // null vira NULL; a aspa dupla dentro da string nao precisa de escape em SQL
+        // aspa simples escapada com barra (MySQL); boolean e numero crus
+        assertTrue("INSERT INTO `users` (`id`, `name`, `active`) VALUES (1, 'O\\'Brien', TRUE);" in sql)
+        // null vira NULL; a aspa dupla dentro da string nao precisa de escape em MySQL
         assertTrue("VALUES (2, 'x, \"y\"', NULL);" in sql)
+    }
+
+    @Test
+    fun `sql escapes backslashes then quotes (MySQL)`() {
+        val single = listOf(SchemaColumn("t", "p", "STRING", false))
+        val row = listOf(mapOf("t.p" to "a\\b'c"))
+        val sql = exportRows(ExportFormat.SQL, "t", single, row)
+        // barra -> \\ , aspa simples -> \'
+        assertTrue("VALUES ('a\\\\b\\'c');" in sql)
+    }
+
+    @Test
+    fun `empty rows yields header or create only, no data lines`() {
+        val csv = exportRows(ExportFormat.CSV, "users", schema(), emptyList())
+        assertEquals("id,name,active\r\n", csv)
+        val sql = exportRows(ExportFormat.SQL, "users", schema(), emptyList())
+        assertTrue("CREATE TABLE IF NOT EXISTS `users`" in sql)
+        assertTrue("INSERT" !in sql)
     }
 
     @Test
@@ -65,9 +104,9 @@ class ExportTest {
         assertEquals("u.id,o.id,o.total", csv.trim().split("\r\n").first())
 
         val sql = exportRows(ExportFormat.SQL, "orders", joined, row)
-        assertTrue("\"u.id\" INTEGER" in sql)
-        assertTrue("\"o.id\" INTEGER" in sql)
-        assertTrue("PRIMARY KEY (\"u.id\")" in sql)
+        assertTrue("`u.id` INT" in sql)
+        assertTrue("`o.id` INT" in sql)
+        assertTrue("PRIMARY KEY (`u.id`)" in sql)
         // valores continuam buscados pela chave qualificada, independentemente do cabecalho
         assertTrue("VALUES (1, 9, 5.0);" in sql)
     }

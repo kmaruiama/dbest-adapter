@@ -9,7 +9,8 @@ import dbest.misc.isEmpty
   e as linhas ja drenadas (List<Map<"source.name", valor>>). A entrega HTTP mora em dbest.http.
 
   Duas formas puras e sem dependencia extra: CSV (RFC 4180) e SQL (CREATE TABLE + INSERTs, dialeto
-  padrao ANSI: identificadores entre aspas duplas, literais entre aspas simples com '' escapado).
+  MySQL: identificadores entre crases, literais entre aspas simples com \ e ' escapados, como o
+  exportToMySQLScript legado).
   Excel/XML/DAT ficam como pontos de extensao — adicionar uma variante quebra o when de proposito.
 
   Nome exibido de cada coluna (cabecalho CSV / identificador SQL): segue a regra do exportToCSV
@@ -99,7 +100,7 @@ private fun sqlExport(table: String, schema: List<SchemaColumn>, rows: List<Map<
 
 private fun createTable(table: String, schema: List<SchemaColumn>, headers: List<String>): String {
     val out = StringBuilder()
-    out.append("CREATE TABLE ").append(sqlIdentifier(table)).append(" (\n")
+    out.append("CREATE TABLE IF NOT EXISTS ").append(sqlIdentifier(table)).append(" (\n")
     val primaryKeys: MutableList<String> = ArrayList()
     for (i in schema.indices) {
         if (i != 0) out.append(",\n")
@@ -136,24 +137,24 @@ private fun insertRow(table: String, schema: List<SchemaColumn>, headers: List<S
     return out.toString()
 }
 
-// identificador ANSI: entre aspas duplas, aspas internas dobradas
-private fun sqlIdentifier(name: String): String = "\"" + name.replace("\"", "\"\"") + "\""
+// identificador MySQL: entre crases, crases internas dobradas
+private fun sqlIdentifier(name: String): String = "`" + name.replace("`", "``") + "`"
 
 // literal por tipo do VALOR (nao do schema): numeros crus, boolean TRUE/FALSE, null NULL,
-// o resto vira string entre aspas simples com '' escapado
+// o resto vira string entre aspas simples com \ e ' escapados (MySQL); a barra vem antes da aspa
 private fun sqlLiteral(value: Any?): String = when (value) {
     null -> "NULL"
     is Boolean -> if (value) "TRUE" else "FALSE"
     is Number -> value.toString()
-    else -> "'" + value.toString().replace("'", "''") + "'"
+    else -> "'" + value.toString().replace("\\", "\\\\").replace("'", "\\'") + "'"
 }
 
-// tipo do schema (string vinda da engine) -> tipo SQL padrao; desconhecido vira VARCHAR(255)
+// tipo do schema (string vinda da engine) -> tipo MySQL; desconhecido vira TEXT (como o legado)
 private fun sqlType(type: String): String = when (type) {
-    "INTEGER" -> "INTEGER"
+    "INTEGER" -> "INT"
     "LONG" -> "BIGINT"
-    "FLOAT" -> "REAL"
-    "DOUBLE" -> "DOUBLE PRECISION"
+    "FLOAT" -> "FLOAT"
+    "DOUBLE" -> "DOUBLE"
     "BOOLEAN" -> "BOOLEAN"
-    else -> "VARCHAR(255)"
+    else -> "TEXT"
 }

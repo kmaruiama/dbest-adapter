@@ -50,8 +50,9 @@ CORS filter, so the client must hit its **own origin**, never `:8000` directly.
 `{id}` is a node id (integer). Unknown id → 404.
 
 `/nodes/{id}/export` is the one endpoint whose body is **not** a mirrored JSON envelope: it streams
-the node's result as a downloadable `text/csv` or `application/sql` file (RFC 4180 CSV; ANSI SQL
-`CREATE TABLE` + `INSERT`s). Column headers/identifiers follow the legacy `exportToCSV` rule —
+the node's result as a downloadable `text/csv` or `application/sql` file (RFC 4180 CSV; MySQL
+`CREATE TABLE IF NOT EXISTS` + `INSERT`s, matching legacy `exportToMySQLScript`). Column
+headers/identifiers follow the legacy `exportToCSV` rule —
 bare `name` when all are unique, else every column falls back to qualified `source.name` (all-or-
 nothing, so join outputs like `u.id`/`o.id` stay distinct). Unknown `format` → 400. The client must
 **not** route it through the JSON `request()` helper — use a plain link / `window.location` so the

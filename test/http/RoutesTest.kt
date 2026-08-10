@@ -180,7 +180,7 @@ class RoutesTest {
         assertEquals(Status.OK, sql.status)
         assertTrue(sql.header("Content-Type")!!.startsWith("application/sql"))
         assertEquals("attachment; filename=\"people.sql\"", sql.header("Content-Disposition"))
-        assertTrue("CREATE TABLE \"people\"" in sql.bodyString())
+        assertTrue("CREATE TABLE IF NOT EXISTS `people`" in sql.bodyString())
     }
 
     @Test
