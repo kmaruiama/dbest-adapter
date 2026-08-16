@@ -6,6 +6,8 @@ import java.awt.EventQueue
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import java.nio.file.Path
+import javax.swing.JFileChooser
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import org.http4k.core.Response
@@ -73,6 +75,45 @@ private fun openNativeDialog(): Picked? {
         }
     }
     return holder[0]
+}
+
+// escolhe uma PASTA no servidor (JFileChooser porque o FileDialog nativo do AWT nao seleciona
+// diretorios de forma portavel). Usado para configurar a pasta das sessoes. null se cancelou.
+fun pickDirectory(): Path? {
+    val holder = arrayOfNulls<File>(1)
+    EventQueue.invokeAndWait {
+        val owner = Frame()
+        owner.isAlwaysOnTop = true
+        val chooser = JFileChooser()
+        chooser.dialogTitle = "DBest — escolher a pasta das sessoes"
+        chooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        val result = chooser.showDialog(owner, "Escolher")
+        owner.dispose()
+        if (result == JFileChooser.APPROVE_OPTION) {
+            holder[0] = chooser.selectedFile
+        }
+    }
+    return holder[0]?.toPath()
+}
+
+// dialogo nativo de SALVAR (escolher caminho + nome do arquivo .dbest). null se cancelou.
+fun pickSaveFile(defaultName: String): Path? {
+    val holder = arrayOfNulls<File>(1)
+    EventQueue.invokeAndWait {
+        val owner = Frame()
+        owner.isAlwaysOnTop = true
+        val dialog = FileDialog(owner, "DBest — salvar sessao", FileDialog.SAVE)
+        dialog.file = defaultName
+        dialog.isVisible = true
+        val directory = dialog.directory
+        val file = dialog.file
+        dialog.dispose()
+        owner.dispose()
+        if (directory != null && file != null) {
+            holder[0] = File(directory, file)
+        }
+    }
+    return holder[0]?.toPath()
 }
 
 private fun csvBody(path: String, name: String): JsonElement {

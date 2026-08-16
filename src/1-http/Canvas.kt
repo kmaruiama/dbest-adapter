@@ -41,6 +41,9 @@ class Canvas(initial: History = History()) : AutoCloseable {
 
     fun session(): Session = current().second.session
 
+    // history completo (session + pilhas de undo/redo) para persistir a aba em arquivo
+    fun history(): History = current().second
+
     fun snapshot(): Ack = synchronized(lock) { ack() }
 
     // session + Ack sob o mesmo lock, para GET /session ser consistente

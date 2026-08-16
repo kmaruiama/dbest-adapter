@@ -10,6 +10,7 @@ import org.http4k.core.Status
   IllegalArgumentException  -> 400  (require de apply / construcao de Node)
   SerializationException    -> 400  (corpo malformado, @type desconhecido)
   NotFoundException         -> 404  (id de rota inexistente)
+  EngineBusyException       -> 409  (a espera pela engine estourou o teto; a engine eh single-thread)
   EngineException.PlanError -> 422  (plano semanticamente invalido)
   EngineException.Storage   -> 502  (falha vinda do storage da engine)
   qualquer outra            -> 500
@@ -28,6 +29,8 @@ val errorFilter = Filter { next ->
             next(request)
         } catch (e: NotFoundException) {
             fail(Status.NOT_FOUND, e, "nao encontrado", trace = false)
+        } catch (e: EngineBusyException) {
+            fail(Status.CONFLICT, e, "engine ocupada", trace = false)
         } catch (e: IllegalArgumentException) {
             fail(Status.BAD_REQUEST, e, "requisicao invalida", trace = false)
         } catch (e: SerializationException) {

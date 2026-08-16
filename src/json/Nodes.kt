@@ -6,7 +6,6 @@ import dbest.adapter.LogicalKind
 import dbest.adapter.SetKind
 import dbest.misc.mapCollection
 import dbest.misc.transformOr
-import dbest.misc.valueUnless
 import dbest.model.AggNode
 import dbest.model.AliasNode
 import dbest.model.CollapseNode
@@ -39,36 +38,36 @@ fun json(node: Node): JsonElement = when (node) {
     is FilterNode -> obj("@type" to json(operatorKind(node)), "condition" to json(node.condition))
     is ProjectNode -> obj("@type" to json(operatorKind(node)), "columns" to JsonArray(mapCollection(node.columns, ::json)))
     is SortNode -> obj("@type" to json(operatorKind(node)), "keys" to JsonArray(mapCollection(node.keys, ::json)))
-    is DistinctNode -> obj("@type" to json(operatorKind(node)), "hashed" to valueUnless(json(false), node.hashed))
+    is DistinctNode -> obj("@type" to json(operatorKind(node)), "hashed" to json(node.hashed))
     is LimitNode -> obj(
         "@type" to json(operatorKind(node)),
         "count" to json(node.count),
-        "offset" to valueUnless(json(node.offset), node.offset == 0),
+        "offset" to json(node.offset),
     )
     is AliasNode -> obj("@type" to json(operatorKind(node)), "from" to json(node.from), "to" to json(node.to))
     is CollapseNode -> obj("@type" to json(operatorKind(node)), "alias" to json(node.alias))
     is ExplodeNode -> obj(
         "@type" to json(operatorKind(node)),
         "column" to json(node.column),
-        "delimiter" to valueUnless(json(node.delimiter), node.delimiter == ","),
+        "delimiter" to json(node.delimiter),
     )
     is RowNumberNode -> obj(
         "@type" to json(operatorKind(node)),
         "alias" to json(node.alias),
         "column" to json(node.column),
-        "start" to valueUnless(json(node.start), node.start == 1),
+        "start" to json(node.start),
     )
     is AggNode -> obj(
         "@type" to json(operatorKind(node)),
         "alias" to json(node.alias),
         "by" to transformOr(node.by, ::json, JsonNull),
         "aggregates" to JsonArray(mapCollection(node.aggregates, ::json)),
-        "hashed" to valueUnless(json(false), node.hashed),
+        "hashed" to json(node.hashed),
     )
     is RemoveColumnsNode -> obj(
         "@type" to json(operatorKind(node)),
         "columns" to JsonArray(mapCollection(node.columns, ::json)),
-        "alias" to valueUnless(json(node.alias), node.alias == "Projection"),
+        "alias" to json(node.alias),
     )
     is MaterializeNode -> obj("@type" to json(operatorKind(node)))
     is MemoizeNode -> obj("@type" to json(operatorKind(node)))
@@ -76,17 +75,17 @@ fun json(node: Node): JsonElement = when (node) {
     is JoinNode -> obj(
         "@type" to json(operatorKind(node)),
         "on" to JsonArray(mapCollection(node.on, ::json)),
-        "type" to valueUnless(json(node.type.name), node.type == JoinType.INNER),
-        "algorithm" to valueUnless(json(node.algorithm.name), node.algorithm == JoinAlgorithm.NESTED_LOOP),
+        "type" to json(node.type.name),
+        "algorithm" to json(node.algorithm.name),
     )
     is CrossNode -> obj("@type" to json(operatorKind(node)))
     is SetOpNode -> obj(
         "@type" to json(operatorKind(node)),
         "kind" to json(node.kind.name),
-        "hashed" to valueUnless(json(false), node.hashed),
+        "hashed" to json(node.hashed),
     )
     is LogicalOpNode -> obj("@type" to json(operatorKind(node)), "kind" to json(node.kind.name))
-    is ExistsNode -> obj("@type" to json(operatorKind(node)), "bilateral" to valueUnless(json(true), !node.bilateral))
+    is ExistsNode -> obj("@type" to json(operatorKind(node)), "bilateral" to json(node.bilateral))
 }
 
 fun nodeOf(element: JsonElement): Node {

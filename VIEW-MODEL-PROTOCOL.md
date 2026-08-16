@@ -1,11 +1,14 @@
 # VIEW-MODEL-PROTOCOL
 
 The wire contract between **model-adapter2** (the server that owns the canvas) and any client
-(today: **dbest-frontend**). This document is the single source of truth both sides mirror:
+(today: **dbest-frontend**).
 
 - Server codecs (authoritative): `src/json/*.kt` — `Nodes.kt`, `TableSpecs.kt`, `Commands.kt`,
   `Session.kt`, `History.kt`, `AdapterCodec.kt`, `JsonTree.kt`; envelopes in `src/1-http/`.
-- Client mirror: `dbest-frontend/src/types/*.ts` (vocabulary) + `src/provider/parse.ts` (boundary).
+- A client mirrors the **envelope** only — sessions, edges, positions, commands — all of which are
+  operator-agnostic. It does **not** mirror the operator vocabulary: a node is an opaque map tagged
+  by `@type`, and what its fields are, how to edit them, and whether it is editable at all come from
+  the catalog (§3.7). Adding an operator is a server-only change.
 
 It is transcribed from those codecs; if code and doc disagree, the code wins — fix the doc.
 Every payload is JSON (`application/json; charset=utf-8`).
@@ -21,9 +24,9 @@ Every payload is JSON (`application/json; charset=utf-8`).
 - **Rows and schema are never mirrored** — they are fetched fresh from the engine per node (§3).
 - **Discriminated unions are tagged by `@type`** (nodes, table specs, conditions, commands); the
   pick-file result is tagged by `kind`.
-- **Defaults are omitted.** The encoder drops a field whose value equals its default; the decoder
-  restores that default when the field is absent. Defaults are listed per type below. A client
-  must tolerate omission and should likewise omit at default when sending.
+- **Every field is emitted.** The encoder writes a node's fields whatever their values, so a client
+  never has to know a type's defaults to read one. The decoder still *restores* a default when a
+  field is absent, so a client may omit at default when sending; the server never does.
 - **Parse at the boundary, envelope + tags.** The client validates the envelope shape and every
   `@type`/enum tag, then trusts leaf values (`provider/parse.ts`). New tags are admitted by
   extending the enum arrays (`NODE_TYPES`, `TABLE_SPEC_KINDS`, `PICKED_KINDS`).
@@ -39,6 +42,7 @@ CORS filter, so the client must hit its **own origin**, never `:8000` directly.
 | POST | `/commands` | `Command` (§7) | `Ack` (§3.2) | sets `ETag`; validates + applies |
 | POST | `/undo` | — | `Ack` | |
 | POST | `/redo` | — | `Ack` | |
+| GET  | `/operators` | — | `Catalog` (§3.7) | static palette catalog; fetch once at boot |
 | POST | `/pick-file` | — | `PickedFile` (§3.6) | opens a native dialog **on the server host** |
 | GET  | `/roots` | — | `NodeId[]` (ints) | nodes nothing consumes (query roots) |
 | GET  | `/problems` | — | `Problem[]` (§3.4) | validation issues for the whole session |
@@ -110,6 +114,43 @@ absolute **path** of a file chosen in a native dialog on the server host — nev
 `csv` carries the header names and one sample row (client infers column types). `head`/`dat` are
 BTree tables whose schema the engine reads from the file itself. Unsupported extension → 400.
 
+### 3.7 Catalog — `GET /operators`
+The palette, owned by the server (`src/2-canvas/model/Catalog.kt`, encoded in `src/json/Catalog.kt`).
+Static per build; the client fetches it once at boot and reads it through a module-level accessor.
+```json
+{ "categories": ["Algebra", …],
+  "types": { "join": { "arity": "binary", "editable": true,
+                       "fields": [ {"at":"type","widget":"pick","options":["INNER", …]},
+                                   {"at":"on","widget":"rows",
+                                    "of":[{"at":"left","widget":"qualified"}, …]} ],
+                       "variants": ["type","algorithm"] } },
+  "operators": [ { "key": "hashLeftOuterJoin", "type": "join", "symbol": "#⟕",
+                   "category": "Joins", "template": { …Node } } ] }
+```
+- **One chip per *variant*, not per node type** — 49 chips over 19 types. The chips that exist *are*
+  the executable set: there is deliberately no `FULL`+`NESTED_LOOP` chip, and no `RIGHT_SEMI`/
+  `RIGHT_ANTI` under `NESTED_LOOP`, because the engine rejects those at run time (422).
+- `template` is a `Node` (§5.1) already in its unconfigured state, with `"?"` placeholders where the
+  user must fill something in. It is built through the same data classes `/commands` validates, so a
+  template that a node's `require` would reject cannot be served.
+- **`types[kind].fields`** is the parameter form, in display order: this is what lets a client edit
+  an operator it knows nothing about. Each entry is `{at, widget}` plus whatever that widget needs —
+  `options` for `pick`, `item` for `list`, `of` for `rows`. Widgets: `text int flag column qualified
+  pick condition list rows`. `condition` is the one shape a flat spec cannot describe (filter's
+  recursive tree, §5.4) and needs a bespoke editor. Absent for the four types with no parameters
+  (`materialize`, `memoize`, `hashIndex`, `cross`), and `editable` is true exactly when it is
+  present. `CatalogTest` asserts every `at` exists on that type's template.
+- **No client-side validation is required.** Every node's constructor enforces its own invariants
+  (`require` in `Nodes.kt`), so an invalid node sent to `/commands` comes back 400 with a message.
+  A client may submit whatever the form produces and render that message.
+- `variants` is absent for types with a single symbol. It names the fields that distinguish one chip
+  from another within a type; comparing them against each chip's `template` is how a client recovers
+  which chip a canvas node came from, hence its symbol. Since every field is now emitted (§1), that
+  comparison is a direct field match with nothing to merge in first.
+- `arity` ∈ `source | unary | binary`.
+- **`scan` is absent from `types` and `operators`**: it has no palette chip (it is created from the
+  session's table list) and is the only node with no input ports.
+
 ## 4. Session model
 
 ### 4.1 Session
@@ -132,9 +173,10 @@ array. Every one of the four is omitted when empty.
 
 ### 5.1 The node ADT (`@type`, 20 kinds)
 Arity ⇒ input ports: **source** = none, **binary** = `LEFT`+`RIGHT`, **unary** = `ONLY`.
-`?` marks a field the encoder omits at the listed default.
+`?` marks a field a client may omit when sending, and the listed value the decoder then supplies.
+The encoder always writes every field, so all of them are present on anything you receive (§1).
 
-| `@type` | arity | fields (default) |
+| `@type` | arity | fields (default when omitted) |
 |---------|-------|------------------|
 | `scan` | source | `table` (TableId int), `alias` |
 | `filter` | unary | `condition` (§5.3) |
@@ -157,9 +199,7 @@ Arity ⇒ input ports: **source** = none, **binary** = `LEFT`+`RIGHT`, **unary**
 | `logicalOp` | binary | `kind: LogicalKind` |
 | `exists` | binary | `bilateral?` = `false` |
 
-Notes: `agg.by` is **always present**, either a `QualifiedCol` (§5.5) or `null`. `distinct.hashed`,
-`setOp.hashed` and `exists.bilateral` only ever appear at their **non-default** value (the default
-is implied by absence). Not every `join` `type`×`algorithm` is executable — the engine rejects
+Notes: `agg.by` is either a `QualifiedCol` (§5.5) or `null`. Not every `join` `type`×`algorithm` is executable — the engine rejects
 `FULL`, `RIGHT_SEMI`, `RIGHT_ANTI` under `NESTED_LOOP` at run time (422). `logicalOp` does **not**
 emit data rows: it yields a single boolean row `{ "condition.EVAL": bool }` combining the two
 sides — `AND`/`OR` test whether both/either side has rows, `XOR` only discriminates when a side is

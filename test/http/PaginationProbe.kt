@@ -13,6 +13,8 @@ import dbest.model.Position
 import dbest.model.ScanNode
 import dbest.model.TableId
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.http4k.core.HttpHandler
 import org.http4k.core.Method
 import org.http4k.core.Request
@@ -22,7 +24,15 @@ import kotlin.test.assertEquals
 
 class PaginationProbe {
 
-    private fun app(): HttpHandler = router(Canvas())
+    // ver RoutesTest.app(): sessao criada + prefixo /sessions/{sid} transparente
+    private fun app(): HttpHandler {
+        val handler = router(Sessions())
+        val created = handler(Request(Method.POST, "/sessions"))
+        val sid = parsedJson(created.bodyString()).jsonObject.getValue("sid").jsonPrimitive.content
+        return { request ->
+            handler(request.uri(request.uri.copy(path = "/sessions/$sid" + request.uri.path)))
+        }
+    }
 
     private fun bigTable(rowCount: Int) = MemorySpec(
         "nums",
@@ -33,7 +43,9 @@ class PaginationProbe {
     private fun HttpHandler.command(command: Command): Response =
         this(Request(Method.POST, "/commands").body(jsonText(json(command))))
 
-    private fun rowCount(response: Response) = parsedJson(response.bodyString()).jsonArray.size
+    // o endpoint devolve {rows, elapsedMs}: conta as tuplas dentro de "rows"
+    private fun rowCount(response: Response) =
+        parsedJson(response.bodyString()).jsonObject.getValue("rows").jsonArray.size
 
     @Test
     fun `probe pagination on a scan of a 300-row table`() {

@@ -31,7 +31,16 @@ import kotlin.test.assertTrue
 
 class RoutesTest {
 
-    private fun app(): HttpHandler = router(Canvas())
+    // sobe o router com uma sessao ja criada e prefixa as rotas de workspace com o /sessions/{sid},
+    // pra os testes continuarem escrevendo os caminhos curtos ("/session", "/nodes/0/rows", ...)
+    private fun app(): HttpHandler {
+        val handler = router(Sessions())
+        val created = handler(Request(Method.POST, "/sessions"))
+        val sid = parsedJson(created.bodyString()).jsonObject.getValue("sid").jsonPrimitive.content
+        return { request ->
+            handler(request.uri(request.uri.copy(path = "/sessions/$sid" + request.uri.path)))
+        }
+    }
 
     private fun users() = MemorySpec(
         "users",
